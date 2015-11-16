@@ -4,11 +4,12 @@ import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.URL;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Scanner;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.zip.GZIPInputStream;
 
 /**
  * @author mh
@@ -17,28 +18,94 @@ import java.util.zip.GZIPInputStream;
 public class ManageNeo4j {
 
     private static final int MB = 1024 * 1024;
-//    private static final String BASE_URL = "http://dist.neo4j.org/";
-    private static final String BASE_URL = "http://localhost:8000/";
+    private static final String BASE_URL = "http://dist.neo4j.org/";
+//    private static final String BASE_URL = "http://localhost:8000/";
 
     public static void main(String[] args) throws Exception {
 //        if (args[0].equals("download")) downloadNeo4j(args[1]);
-//        downloadNeo4j("2.2.5");
+        downloadNeo4j("2.2.5");
         int port = installNeo4j("2.2.5");
         System.out.println("Port "+port);
     }
 
+    static class Version {
+        enum Edition { community, enterprise }
+        enum OS { unix, windows; public String compressed(boolean compressed) { return compressed ? (this == unix ? ".gz" : ".zip"):"";} }
+        Edition edition;
+        OS os;
+        String version;
+
+        public String toString() {
+            return toString(edition,version,os,false);
+        }
+
+        public String toString(Edition edition, String version, OS os, boolean compressed) {
+            return String.format("neo4j-%s-%s-%s%s",edition,version,os,os.compressed(compressed));
+        }
+    }
+    static class Installation {
+        String edition;
+        String version;
+        String download;
+        String directory;
+        int port;
+        int pid;
+        // auth, pagecache,heap,ssl,extension
+    }
+
     private static int installNeo4j(String version) throws IOException, InterruptedException {
+        int port = getFreePort();
+        String target = new File(tmpDir(), neo4jFileName(version, false) + "-" + port).getAbsolutePath();
+        System.err.println("target:"+target);
+        assertEmptyDirectory(target);
+        String download = downloadFileName(version).getAbsolutePath();
+        String[] cmd = {"tar", "xzf", download, "-C", target,neo4jFileName(version,false)+"/*"};
+        execCommand(cmd);
+        patchConfig(target,"neo4j-server.properties","org.neo4j.server.webserver.https.port","org.neo4j.server.webserver.https.port="+port);
+        return port;
+    }
+
+    private static File assertEmptyDirectory(String target) throws IOException {
+        File file = new File(target);
+        if (!file.exists()) {
+            if (!file.mkdirs()) throw new IOException("Error creating directories "+target);
+            return file;
+        }
+        if (!file.isDirectory()) throw new IOException("No directory "+target);
+        if (!file.canWrite()) throw new IOException("Not Writable "+target);
+        if ( file.list().length>0) throw new IOException("Not Empty "+target);
+
+        return file;
+    }
+
+    private static void patchConfig(String path, String file, String pattern, String newLine) throws IOException {
+        File configFile = new File(new File(path, "conf"), file);
+        Scanner scanner = new Scanner(configFile);
+        List<String> lines = readFile(scanner);
+        FileWriter writer = new FileWriter(configFile);
+        for (String line : lines) {
+            if (line.contains(pattern)) line = newLine;
+            writer.write(line);
+        }
+        writer.close();
+    }
+
+    private static List<String> readFile(Scanner scanner) {
+        List<String> lines = new ArrayList<>(50);
+        while (scanner.hasNextLine()) {
+            String line = scanner.nextLine();
+            lines.add(line);
+        }
+        scanner.close();
+        return lines;
+    }
+
+    private static int getFreePort() {
         int port;
         do {
             port = ThreadLocalRandom.current().nextInt(10000, 65000);
         } while(!testSocket(port));
-        Runtime rt = Runtime.getRuntime();
-        String target = new File(tmpDir(), neo4jFileName(version, false) + "-" + port).getAbsolutePath();
-        String download = downloadFileName(version).getAbsolutePath();
-        String[] cmd = {"tar", "xzf", download, "-C", target};
-        execCommand(cmd);
         return port;
-        // Runtime.getRuntime().exec(params);
     }
 
     private static void execCommand(String... cmd) throws IOException, InterruptedException {
@@ -93,6 +160,8 @@ public class ManageNeo4j {
             os.write(buffer,0,read);
             total += read;
         }
+        os.close();
+        is.close();
         System.err.printf("Download complete. %d in %d seconds.%n", total, TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis() - start));
         return total;
     }
