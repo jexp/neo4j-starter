@@ -1,0 +1,22 @@
+== A JVM based Management Library for Testing against Neo4j Instances
+
+*Currently works only under Unix / OSX*
+
+. Should work for Neo4j versions 1.9+
+. Download specfic versions into a configurable directory, by default temp-dir or $HOME/.neo4j
+. Determine free ports to run Neo4j on
+. Extract and configure an insstance for that port / db-directory / etc.
+. Configure port(s), memory (heap, page-cache), (di)sable shell, disable backup
+. Start, Stop, Restart, Clean-DB, Remove an instance
+. Provide fixtures: cypher-file, db-directory, cypher-statements
+
+* try to mimic the API of http://neo4j.com/docs/stable/server-unmanaged-extensions-testing.html[neo4j-harness]*, esp. `ServerControls` and `Neo4jRule`
+
+== License
+
+Apache License 2.0
+
+== To be used with
+
+* Spring Boot
+* Apache Flink
