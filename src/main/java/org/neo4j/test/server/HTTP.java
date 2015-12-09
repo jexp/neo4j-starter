@@ -194,9 +194,11 @@ public class HTTP
             }
         }
 
-        private HttpURLConnection connect(String method, String uri, String payload) throws IOException {
+        private HttpURLConnection connect(String method, String uri, String payload) throws IOException, URISyntaxException {
             URL url = new URL(uri);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            HttpURLConnection.setFollowRedirects(true);
+            conn.setInstanceFollowRedirects(true);
             conn.setRequestMethod(method);
             handleAuth(url, conn);
             for (Map.Entry<String, String> header : headers.entrySet()) {
@@ -210,7 +212,16 @@ public class HTTP
                 conn.setDoOutput(true);
             }
             conn.connect();
+            if (isRedirect(conn.getResponseCode())) {
+                String location = conn.getHeaderField("location");
+                if (location==null || location.trim().isEmpty()) throw new RuntimeException("Redirect on "+uri+" but no Location header returned");
+                return connect(method,location,payload);
+            }
             return conn;
+        }
+
+        private boolean isRedirect(int status) {
+            return status ==301 || status ==302;
         }
 
         private void handleAuth(URL url, HttpURLConnection conn) {
@@ -246,7 +257,7 @@ public class HTTP
             String encoding = conn.getHeaderField("content-encoding");
             InputStream is = new BufferedInputStream(conn.getInputStream());
             Scanner scanner = new Scanner(is).useDelimiter("\\Z");
-            Object content = scanner.next();
+            Object content = scanner.hasNext() ? scanner.next() : "";
             boolean more = scanner.hasNext();
             return new Response( status, content, location );
         }
