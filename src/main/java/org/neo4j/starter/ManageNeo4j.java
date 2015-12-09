@@ -63,12 +63,16 @@ public class ManageNeo4j {
 
     static void writeFile(File path, String file, String contents) {
         File target = new File(path, String.join(File.separator, file.split("/")));
+        File parent = target.getParentFile();
+        if (!parent.exists()) {
+            if (!parent.mkdirs()) throw new RuntimeException("Error creating directory: "+parent);
+        }
         try {
             FileWriter writer = new FileWriter(target);
             writer.write(contents);
             writer.close();
         } catch (IOException ioe) {
-            throw new RuntimeException("Error writing to file "+target);
+            throw new RuntimeException("Error writing to file "+target,ioe);
         }
     }
 
