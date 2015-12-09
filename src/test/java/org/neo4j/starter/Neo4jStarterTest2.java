@@ -7,6 +7,15 @@ import org.neo4j.test.server.HTTP;
 import org.neo4j.test.server.ManagedServerBuilders;
 import org.neo4j.test.server.ServerControls;
 
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -48,6 +57,8 @@ public class Neo4jStarterTest2 {
     @Test
     public void testServerWithHttps() throws Exception {
         // Given
+        configureJDKWithFakeTrustManager();
+
         try (ServerControls server = ManagedServerBuilders.newManagedBuilder()
                 .withFixture("CREATE (:User)")
                 .withHttps()
@@ -59,6 +70,32 @@ public class Neo4jStarterTest2 {
             // Then
             assertEquals(true, result.iterator().hasNext());
         }
+    }
+
+    /**
+     * apply a {@link TrustManager} to the JDK that simply accepts all certificates. Doing this prevents exceptions
+     * when dealing e.g. with self-signed certificates
+     * @throws NoSuchAlgorithmException
+     * @throws KeyManagementException
+     */
+    private void configureJDKWithFakeTrustManager() throws NoSuchAlgorithmException, KeyManagementException {
+        TrustManager[] managers = new TrustManager[] {new X509TrustManager() {
+            @Override
+            public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            }
+
+            @Override
+            public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
+            }
+
+            @Override
+            public X509Certificate[] getAcceptedIssuers() {
+                return null;
+            }
+        }};
+        SSLContext sslContext = SSLContext.getInstance("SSL");
+        sslContext.init(null, managers, new SecureRandom());
+        HttpsURLConnection.setDefaultSSLSocketFactory(sslContext.getSocketFactory());
     }
 
     @Test
